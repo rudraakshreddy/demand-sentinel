@@ -115,7 +115,7 @@ def make_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
     # Days to next event — vectorised via np.searchsorted (O(n log k), not O(n·k))
     if "has_event" in df.columns:
         event_dates = np.sort(
-            df.loc[df["has_event"] == 1, "date"].unique().astype("datetime64[D]")
+            np.array(df.loc[df["has_event"] == 1, "date"].unique(), dtype="datetime64[D]")
         )
         if len(event_dates):
             dates_arr = df["date"].values.astype("datetime64[D]")
