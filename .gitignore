@@ -1,0 +1,64 @@
+# ── Data (too large for git, gitignored) ─────────────────────────────────────
+data/raw/
+data/processed/
+data/external/
+
+# ── Trained model artifacts ───────────────────────────────────────────────────
+data/processed/models/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/*.log
+nohup.out
+
+# ── LaTeX build artefacts ─────────────────────────────────────────────────────
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.lof
+report/*.lot
+report/*.bbl
+report/*.blg
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz
+# Keep the compiled PDF if present
+!report/main.pdf
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.hypothesis/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ── Environments ──────────────────────────────────────────────────────────────
+.env
+.venv/
+venv/
+env/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+notebooks/*.ipynb
+
+# ── Benchmarks ────────────────────────────────────────────────────────────────
+.benchmarks/
+requirements-local.txt
+run_pipeline.sh
+scripts/
