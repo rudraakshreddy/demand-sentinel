@@ -112,18 +112,21 @@ def make_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
         for col in ["has_event", "is_sporting", "is_national", "is_religious", "is_cultural"]:
             df[col] = 0
 
-    # Days to next event — computed once for efficiency
+    # Days to next event — vectorised via np.searchsorted (O(n log k), not O(n·k))
     if "has_event" in df.columns:
-        event_dates = sorted(df.loc[df["has_event"] == 1, "date"].unique())
-        if event_dates:
-            event_dates_arr = np.array(event_dates, dtype="datetime64[D]")
-            df["days_to_next_event"] = df["date"].apply(
-                lambda d: int(min(
-                    (e - np.datetime64(d, "D")).astype(int)
-                    for e in event_dates_arr
-                    if e >= np.datetime64(d, "D")
-                )) if any(e >= np.datetime64(d, "D") for e in event_dates_arr) else 365
+        event_dates = np.sort(
+            df.loc[df["has_event"] == 1, "date"].unique().astype("datetime64[D]")
+        )
+        if len(event_dates):
+            dates_arr = df["date"].values.astype("datetime64[D]")
+            idx = np.searchsorted(event_dates, dates_arr, side="left")
+            safe_idx = np.minimum(idx, len(event_dates) - 1)
+            days = np.where(
+                idx < len(event_dates),
+                (event_dates[safe_idx] - dates_arr).astype(int),
+                365,
             )
+            df["days_to_next_event"] = np.clip(days, 0, 365)
         else:
             df["days_to_next_event"] = 365
     return df
