@@ -213,7 +213,7 @@ def main() -> None:
         log.info("Saved %d Prophet forecast rows to DB", len(records))
 
     import json
-    out = [{k: v if not isinstance(v, list) else json.dumps(v)
+    out = [{k: v if not isinstance(v, list) else json.dumps(v, default=str)
             for k, v in r.items()} for r in results]
     pd.DataFrame(out).to_parquet(PROCESSED_DIR / "prophet_results.parquet", index=False)
     log.info("Done. Fitted %d / %d Prophet models.", len(results), len(series_list))
