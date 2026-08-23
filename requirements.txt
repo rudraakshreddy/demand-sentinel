@@ -44,4 +44,3 @@ pytest==8.3.2
 pytest-cov==5.0.0
 
 # Type checking (optional but recommended for IDE support)
-pandas-stubs==2.2.3.240822
