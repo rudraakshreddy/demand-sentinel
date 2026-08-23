@@ -2,7 +2,7 @@ pandas==2.2.3
 numpy==1.26.4
 pyarrow==17.0.0
 sqlalchemy==2.0.36
-psycopg2==2.9.10
+psycopg2-binary==2.9.10
 streamlit==1.37.0
 plotly==5.23.0
 matplotlib==3.9.2
