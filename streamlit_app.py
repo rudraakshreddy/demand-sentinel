@@ -107,7 +107,14 @@ def load_prophet_results() -> pd.DataFrame | None:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_volatility() -> pd.DataFrame | None:
-    return pd.DataFrame({"item_id": [], "store_id": [], "date": [], "rolling_cv": []})
+    try:
+        df = pd.read_sql("SELECT item_id, store_id, date_id as date, rolling_cv FROM fact_risk_flags WHERE rolling_cv IS NOT NULL", get_engine())
+        if len(df) > 0:
+            df["volatility_regime"] = pd.cut(df["rolling_cv"], bins=[-np.inf, 0.5, 1.0, np.inf], labels=["Low", "Medium", "High"])
+        return df
+    except Exception as e:
+        st.error(f'DB Error: {e}')
+        return None
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_shortfall() -> pd.DataFrame | None:
@@ -116,7 +123,7 @@ def load_shortfall() -> pd.DataFrame | None:
 @st.cache_data(ttl=600, show_spinner=False)
 def load_anomalies() -> pd.DataFrame | None:
     try:
-        df = pd.read_sql("SELECT item_id, store_id, date_id as date, anomaly_score as if_score, rolling_cv as cv, rolling_mean as z_score FROM fact_risk_flags WHERE is_anomaly = true", get_engine())
+        df = pd.read_sql("SELECT item_id, store_id, date_id as date, anomaly_score as if_score, rolling_cv as cv, rolling_mean as z_score FROM fact_risk_flags WHERE is_anomaly = true AND flag_type = 'isolation_forest'", get_engine())
         df["date"] = pd.to_datetime(df["date"])
         df["sales"] = 0
         return df.fillna(0)
@@ -177,8 +184,8 @@ if PAGE == "🏠 Overview":
             breach_rate = shortfall["shortfall_breach"].mean()
             col5.metric("Shortfall Breach Rate",
                         f"{breach_rate:.2%}",
-                        delta=f"Target: 5.00%",
-                        delta_color="normal" if abs(breach_rate - 0.05) < 0.02 else "inverse")
+                        delta=f"Target: 2.50%",
+                        delta_color="normal" if abs(breach_rate - 0.025) < 0.01 else "inverse")
         else:
             col5.metric("Shortfall Breach Rate", "N/A", delta="Pending pipeline run", delta_color="off")
 
@@ -377,7 +384,7 @@ elif PAGE == "⚠️ Risk Monitor":
     # ── Volatility regime distribution ──────────────────────────────────────
     col_a, col_b = st.columns(2)
     with col_a:
-        if "volatility_regime" in vol.columns:
+        if vol is not None and "volatility_regime" in vol.columns and len(vol) > 0:
             st.subheader("Volatility Regime Distribution")
             regime_counts = vol["volatility_regime"].value_counts().reset_index()
             regime_counts.columns = ["Regime", "Count"]
@@ -388,6 +395,9 @@ elif PAGE == "⚠️ Risk Monitor":
                 title="Demand Volatility Regimes Across All Series"
             )
             st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.subheader("Volatility Regime Distribution")
+            st.info("Volatility Risk pipeline data not yet generated.")
 
     with col_b:
         if anomalies is not None:
@@ -496,19 +506,19 @@ elif PAGE == "🔬 Model Evaluation":
             st.info("Shortfall Risk pipeline data not yet generated. Run `make risk` locally to push data to Supabase.")
         else:
             breach_rate = shortfall["shortfall_breach"].mean()
-            target = 0.05
+            target = 0.025
 
             fig_gauge = go.Figure(go.Indicator(
                 mode="gauge+number+delta",
                 value=breach_rate * 100,
                 delta={"reference": target * 100, "valueformat": ".2f"},
-                title={"text": "Shortfall Breach Rate (%) vs 5% Target"},
+                title={"text": "Shortfall Breach Rate (%) vs 2.5% Target"},
                 gauge={
-                    "axis": {"range": [0, 15]},
+                    "axis": {"range": [0, 10]},
                     "steps": [
-                        {"range": [0, 4], "color": "#fef9c3"},
-                        {"range": [4, 6], "color": "#bbf7d0"},
-                        {"range": [6, 15], "color": "#fecaca"},
+                        {"range": [0, 1.5], "color": "#fef9c3"},
+                        {"range": [1.5, 3.5], "color": "#bbf7d0"},
+                        {"range": [3.5, 10], "color": "#fecaca"},
                     ],
                     "threshold": {
                         "line": {"color": "green", "width": 4},
