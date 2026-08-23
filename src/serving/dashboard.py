@@ -130,6 +130,16 @@ def load_model_comparison() -> pd.DataFrame | None:
 # PAGE 1: Overview
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
+# ══ Navigation ════════════════════════════════════════════════════════════════
+PAGE = st.sidebar.radio("Navigation", [
+    "🏠 Overview",
+    "📈 Forecast Explorer",
+    "⚠️ Risk Monitor",
+    "🔬 Model Evaluation",
+    "🧹 Data Quality",
+])
+
 if PAGE == "🏠 Overview":
     st.title("📦 Retail Demand Forecasting & Inventory Risk Platform")
     st.caption("M5 Forecasting Competition Dataset · Walmart Stores USA")
