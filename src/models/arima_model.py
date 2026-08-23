@@ -219,7 +219,7 @@ def main() -> None:
     save_forecasts_to_db(results, engine)
     # Save all results as parquet for dashboard
     import json
-    out = [{k: v if not isinstance(v, list) else json.dumps(v)
+    out = [{k: v if not isinstance(v, list) else json.dumps(v, default=str)
             for k, v in r.items()} for r in results]
     pd.DataFrame(out).to_parquet(
         PROCESSED_DIR / "arima_results.parquet", index=False
