@@ -197,9 +197,8 @@ def tune_hyperparameters(X_train, y_train, X_val, y_val) -> dict:
             "random_state":     RANDOM_SEED,
             "n_jobs":           -1,
         }
-        m = xgb.XGBRegressor(**params, early_stopping_rounds=20)
-        m.fit(X_train, y_train, eval_set=[(X_val, y_val)],
-              verbose=False, eval_metric="rmse")
+        m = xgb.XGBRegressor(**params, early_stopping_rounds=20, eval_metric="rmse")
+        m.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
         return compute_rmse(y_val, np.clip(m.predict(X_val), 0, None))
 
     study = optuna.create_study(
@@ -235,9 +234,9 @@ def train_xgb_model(X_train, y_train, X_val, y_val, X_all, y_all,
         params["quantile_alpha"] = quantile_alpha
 
     # Early stopping to find best n_estimators for this objective
-    m_val = xgb.XGBRegressor(**params, early_stopping_rounds=30)
-    m_val.fit(X_train, y_train, eval_set=[(X_val, y_val)],
-              eval_metric="quantile" if quantile_alpha else "rmse", verbose=False)
+    _eval_metric = "quantile" if quantile_alpha else "rmse"
+    m_val = xgb.XGBRegressor(**params, early_stopping_rounds=30, eval_metric=_eval_metric)
+    m_val.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
     best_n = m_val.best_iteration + 1
     log.info("  [%s] best n_estimators=%d", model_name, best_n)
 
