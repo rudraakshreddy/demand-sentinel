@@ -71,7 +71,7 @@ def load_sales() -> pd.DataFrame | None:
     try:
         df = pd.read_sql("SELECT f.item_id, f.store_id, f.date_id as date, f.sales, i.cat_id, i.dept_id FROM fact_sales f JOIN dim_item i ON f.item_id = i.item_id", get_engine())
         df["date"] = pd.to_datetime(df["date"])
-        return df
+        return df.fillna(0)
     except Exception as e:
         st.error(f"Database error in load_sales: {e}")
         return None
@@ -82,7 +82,7 @@ def load_xgb_forecasts() -> pd.DataFrame | None:
         df = pd.read_sql("SELECT item_id, store_id, date_id as date, forecast, lower_ci_95 as lower_ci, upper_ci_95 as upper_ci FROM fact_forecasts WHERE model_name = 'XGBoost'", get_engine())
         df["date"] = pd.to_datetime(df["date"])
         df["actual"] = 0 # merged later
-        return df
+        return df.fillna(0)
     except Exception as e: st.error(f'DB Error: {e}'); return None
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -92,7 +92,7 @@ def load_arima_results() -> pd.DataFrame | None:
         df["date"] = pd.to_datetime(df["date"])
         df["actual"] = 0
         df["model"] = "SARIMA"
-        return df
+        return df.fillna(0)
     except Exception as e: st.error(f'DB Error: {e}'); return None
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -102,7 +102,7 @@ def load_prophet_results() -> pd.DataFrame | None:
         df["date"] = pd.to_datetime(df["date"])
         df["actual"] = 0
         df["model"] = "Prophet"
-        return df
+        return df.fillna(0)
     except Exception as e: st.error(f'DB Error: {e}'); return None
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -119,7 +119,7 @@ def load_anomalies() -> pd.DataFrame | None:
         df = pd.read_sql("SELECT item_id, store_id, date_id as date, anomaly_score as if_score, rolling_cv as cv, rolling_mean as z_score FROM fact_risk_flags WHERE is_anomaly = true", get_engine())
         df["date"] = pd.to_datetime(df["date"])
         df["sales"] = 0
-        return df
+        return df.fillna(0)
     except Exception as e: st.error(f'DB Error: {e}'); return None
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -130,7 +130,7 @@ def load_shap() -> pd.DataFrame | None:
 def load_model_comparison() -> pd.DataFrame | None:
     try:
         df = pd.read_sql("SELECT model_name as \"Model\", mape, smape, mae, rmse, wrmsse, coverage_95, interval_width FROM model_evaluation_results", get_engine())
-        return df
+        return df.fillna(0)
     except Exception as e: st.error(f'DB Error: {e}'); return None
 
 
@@ -555,5 +555,4 @@ elif PAGE == "🧹 Data Quality":
         with open(log_path, "r", encoding="utf-8") as f:
             lines = f.readlines()[-50:]
         st.code("".join(lines), language="text")
-    else:
-        st.info("Ingestion log not yet available. Run `make ingest`.")
+
