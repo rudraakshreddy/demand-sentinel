@@ -119,7 +119,7 @@ def load_volatility() -> pd.DataFrame | None:
 @st.cache_data(ttl=600, show_spinner=False)
 def load_shortfall() -> pd.DataFrame | None:
     try:
-        df = pd.read_sql("SELECT item_id, store_id, date_id as date, shortfall_breach, sri FROM fact_shortfall", get_engine())
+        df = pd.read_sql("SELECT item_id, store_id, date, shortfall_breach, sri FROM fact_shortfall", get_engine())
         df["date"] = pd.to_datetime(df["date"])
         return df
     except Exception as e:
