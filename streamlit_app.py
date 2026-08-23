@@ -69,7 +69,7 @@ def get_engine():
 @st.cache_data(ttl=600, show_spinner=False)
 def load_sales() -> pd.DataFrame | None:
     try:
-        df = pd.read_sql("SELECT item_id, store_id, date_id as date, sales FROM fact_sales", get_engine())
+        df = pd.read_sql("SELECT f.item_id, f.store_id, f.date_id as date, f.sales, i.cat_id, i.dept_id FROM fact_sales f JOIN dim_item i ON f.item_id = i.item_id", get_engine())
         df["date"] = pd.to_datetime(df["date"])
         return df
     except Exception as e:
