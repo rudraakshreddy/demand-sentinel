@@ -117,11 +117,13 @@ def fit_isolation_forest(df: pd.DataFrame) -> tuple:
 
     preds  = iso.predict(X_scaled)           # -1 = anomaly, 1 = normal
     scores = iso.decision_function(X_scaled)  # lower = more anomalous
+    del X_scaled                              # free ~3 GB immediately
 
     df_clean = df_clean.copy()
     df_clean["if_pred"]   = preds
     df_clean["if_score"]  = scores
     df_clean["is_anomaly"] = (preds == -1)
+    del preds, scores                         # free intermediate arrays
 
     flagged = df_clean["is_anomaly"].sum()
     flag_pct = flagged / len(df_clean) * 100
@@ -135,8 +137,12 @@ def fit_isolation_forest(df: pd.DataFrame) -> tuple:
 
 
 def save_flags_to_db(df_flagged: pd.DataFrame, engine) -> None:
+    # Filter to anomalies only — avoids iterrows over 58.9M rows
+    df_anomalies = df_flagged[df_flagged["is_anomaly"]].copy()
+    if df_anomalies.empty:
+        return
     records = []
-    for _, row in df_flagged.iterrows():
+    for _, row in df_anomalies.iterrows():
         date_val = row["date"]
         if hasattr(date_val, "date"):
             date_val = date_val.date()
