@@ -173,11 +173,14 @@ if PAGE == "🏠 Overview":
                     delta=f"{len(anomalies)/len(sales)*100:.2f}% of records" if sales is not None else None,
                     delta_color="off")
     if shortfall is not None and "shortfall_breach" in shortfall.columns:
-        breach_rate = shortfall["shortfall_breach"].mean() if len(shortfall) > 0 else 0.0
-        col5.metric("Shortfall Breach Rate",
-                    f"{breach_rate:.2%}",
-                    delta=f"Target: 5.00%",
-                    delta_color="normal" if abs(breach_rate - 0.05) < 0.02 else "inverse")
+        if len(shortfall) > 0:
+            breach_rate = shortfall["shortfall_breach"].mean()
+            col5.metric("Shortfall Breach Rate",
+                        f"{breach_rate:.2%}",
+                        delta=f"Target: 5.00%",
+                        delta_color="normal" if abs(breach_rate - 0.05) < 0.02 else "inverse")
+        else:
+            col5.metric("Shortfall Breach Rate", "N/A", delta="Pending pipeline run", delta_color="off")
 
     st.divider()
 
@@ -489,30 +492,33 @@ elif PAGE == "🔬 Model Evaluation":
     shortfall = load_shortfall()
     if shortfall is not None and "shortfall_breach" in shortfall.columns:
         st.subheader("Shortfall Risk Calibration")
-        breach_rate = shortfall["shortfall_breach"].mean() if len(shortfall) > 0 else 0.0
-        target = 0.05
+        if len(shortfall) == 0:
+            st.info("Shortfall Risk pipeline data not yet generated. Run `make risk` locally to push data to Supabase.")
+        else:
+            breach_rate = shortfall["shortfall_breach"].mean()
+            target = 0.05
 
-        fig_gauge = go.Figure(go.Indicator(
-            mode="gauge+number+delta",
-            value=breach_rate * 100,
-            delta={"reference": target * 100, "valueformat": ".2f"},
-            title={"text": "Shortfall Breach Rate (%) vs 5% Target"},
-            gauge={
-                "axis": {"range": [0, 15]},
-                "steps": [
-                    {"range": [0, 4], "color": "#fef9c3"},
-                    {"range": [4, 6], "color": "#bbf7d0"},
-                    {"range": [6, 15], "color": "#fecaca"},
-                ],
-                "threshold": {
-                    "line": {"color": "green", "width": 4},
-                    "thickness": 0.75,
-                    "value": target * 100
-                },
-                "bar": {"color": "#7c3aed"},
-            }
-        ))
-        st.plotly_chart(fig_gauge, use_container_width=True)
+            fig_gauge = go.Figure(go.Indicator(
+                mode="gauge+number+delta",
+                value=breach_rate * 100,
+                delta={"reference": target * 100, "valueformat": ".2f"},
+                title={"text": "Shortfall Breach Rate (%) vs 5% Target"},
+                gauge={
+                    "axis": {"range": [0, 15]},
+                    "steps": [
+                        {"range": [0, 4], "color": "#fef9c3"},
+                        {"range": [4, 6], "color": "#bbf7d0"},
+                        {"range": [6, 15], "color": "#fecaca"},
+                    ],
+                    "threshold": {
+                        "line": {"color": "green", "width": 4},
+                        "thickness": 0.75,
+                        "value": target * 100
+                    },
+                    "bar": {"color": "#7c3aed"},
+                }
+            ))
+            st.plotly_chart(fig_gauge, use_container_width=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
