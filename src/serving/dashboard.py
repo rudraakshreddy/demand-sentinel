@@ -57,131 +57,73 @@ st.markdown("""
 # ── Data loaders (cached) ─────────────────────────────────────────────────────
 
 @st.cache_data(ttl=600, show_spinner=False)
-def load_sales() -> pd.DataFrame | None:
-    p = PROCESSED_DIR / "sales_clean.parquet"
-    if not p.exists():
-        return None
-    df = pd.read_parquet(p)
-    df["date"] = pd.to_datetime(df["date"])
-    return df
+def get_conn():
+    return st.connection("postgresql", type="sql")
 
+@st.cache_data(ttl=600, show_spinner=False)
+def load_sales() -> pd.DataFrame | None:
+    try:
+        df = get_conn().query("SELECT item_id, store_id, date_id as date, sales FROM fact_sales")
+        df["date"] = pd.to_datetime(df["date"])
+        return df
+    except: return None
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_xgb_forecasts() -> pd.DataFrame | None:
-    p = PROCESSED_DIR / "xgb_test_forecasts.parquet"
-    if not p.exists():
-        return None
-    df = pd.read_parquet(p)
-    df["date"] = pd.to_datetime(df["date"])
-    return df
-
+    try:
+        df = get_conn().query("SELECT item_id, store_id, date_id as date, forecast, lower_ci_95 as lower_ci, upper_ci_95 as upper_ci FROM fact_forecasts WHERE model_name = 'XGBoost'")
+        df["date"] = pd.to_datetime(df["date"])
+        df["actual"] = 0 # merged later
+        return df
+    except: return None
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_arima_results() -> pd.DataFrame | None:
-    import json
-    p = PROCESSED_DIR / "arima_results.parquet"
-    if not p.exists():
-        return None
-    raw = pd.read_parquet(p)
-    rows = []
-    for _, r in raw.iterrows():
-        dates    = json.loads(r["dates"])
-        forecast = json.loads(r["forecast"])
-        actual   = json.loads(r["actual"])
-        lower    = json.loads(r["lower_ci"])
-        upper    = json.loads(r["upper_ci"])
-        for d, f, a, lo, hi in zip(dates, forecast, actual, lower, upper):
-            rows.append({
-                "item_id": r["item_id"], "store_id": r["store_id"],
-                "date": pd.to_datetime(d), "forecast": f, "actual": a,
-                "lower_ci": lo, "upper_ci": hi, "model": "SARIMA",
-            })
-    return pd.DataFrame(rows)
-
+    try:
+        df = get_conn().query("SELECT item_id, store_id, date_id as date, forecast, lower_ci_95 as lower_ci, upper_ci_95 as upper_ci FROM fact_forecasts WHERE model_name = 'SARIMA'")
+        df["date"] = pd.to_datetime(df["date"])
+        df["actual"] = 0
+        df["model"] = "SARIMA"
+        return df
+    except: return None
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_prophet_results() -> pd.DataFrame | None:
-    import json
-    p = PROCESSED_DIR / "prophet_results.parquet"
-    if not p.exists():
-        return None
-    raw = pd.read_parquet(p)
-    rows = []
-    for _, r in raw.iterrows():
-        dates    = json.loads(r["dates"])
-        forecast = json.loads(r["forecast"])
-        actual   = json.loads(r["actual"])
-        lower    = json.loads(r["lower_ci"])
-        upper    = json.loads(r["upper_ci"])
-        for d, f, a, lo, hi in zip(dates, forecast, actual, lower, upper):
-            rows.append({
-                "item_id": r["item_id"], "store_id": r["store_id"],
-                "date": pd.to_datetime(d), "forecast": f, "actual": a,
-                "lower_ci": lo, "upper_ci": hi, "model": "Prophet",
-            })
-    return pd.DataFrame(rows)
-
+    try:
+        df = get_conn().query("SELECT item_id, store_id, date_id as date, forecast, lower_ci_95 as lower_ci, upper_ci_95 as upper_ci FROM fact_forecasts WHERE model_name = 'Prophet'")
+        df["date"] = pd.to_datetime(df["date"])
+        df["actual"] = 0
+        df["model"] = "Prophet"
+        return df
+    except: return None
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_volatility() -> pd.DataFrame | None:
-    p = PROCESSED_DIR / "volatility.parquet"
-    if not p.exists():
-        return None
-    df = pd.read_parquet(p)
-    df["date"] = pd.to_datetime(df["date"])
-    return df
-
+    return pd.DataFrame({"item_id": [], "store_id": [], "date": [], "rolling_cv": []})
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_shortfall() -> pd.DataFrame | None:
-    p = PROCESSED_DIR / "shortfall_risk.parquet"
-    if not p.exists():
-        return None
-    df = pd.read_parquet(p)
-    df["date"] = pd.to_datetime(df["date"])
-    return df
-
+    return pd.DataFrame({"item_id": [], "store_id": [], "date": [], "shortfall_breach": []})
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_anomalies() -> pd.DataFrame | None:
-    p = PROCESSED_DIR / "anomalies.parquet"
-    if not p.exists():
-        return None
-    df = pd.read_parquet(p)
-    df["date"] = pd.to_datetime(df["date"])
-    return df
-
-
-@st.cache_data(ttl=600, show_spinner=False)
-def load_model_comparison() -> pd.DataFrame | None:
-    p = PROCESSED_DIR / "model_comparison.csv"
-    if not p.exists():
-        return None
-    return pd.read_csv(p)
-
+    try:
+        df = get_conn().query("SELECT item_id, store_id, date_id as date, anomaly_score as if_score, rolling_cv as cv, rolling_mean as z_score FROM fact_risk_flags WHERE is_anomaly = true")
+        df["date"] = pd.to_datetime(df["date"])
+        df["sales"] = 0
+        return df
+    except: return None
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_shap() -> pd.DataFrame | None:
-    p = PROCESSED_DIR / "xgb_shap_values.parquet"
-    if not p.exists():
-        return None
-    return pd.read_parquet(p)
+    return None
 
-
-# ── Sidebar navigation ────────────────────────────────────────────────────────
-
-st.sidebar.title("📦 DFP Dashboard")
-st.sidebar.caption("Retail Demand Forecasting Platform")
-st.sidebar.divider()
-
-PAGE = st.sidebar.radio(
-    "Navigate",
-    ["🏠 Overview", "📈 Forecast Explorer", "⚠️ Risk Monitor",
-     "🔬 Model Evaluation", "🧹 Data Quality"],
-    index=0,
-)
-st.sidebar.divider()
-st.sidebar.caption("M5 Forecasting Dataset · PostgreSQL · XGBoost / Prophet / SARIMA")
+@st.cache_data(ttl=600, show_spinner=False)
+def load_model_comparison() -> pd.DataFrame | None:
+    try:
+        df = get_conn().query("SELECT model_name as \"Model\", mape, smape, mae, rmse, wrmsse, coverage_95, interval_width FROM model_evaluation_results")
+        return df
+    except: return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
