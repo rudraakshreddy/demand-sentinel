@@ -1,0 +1,20 @@
+\begin{table}[H]
+\centering
+\caption{XGBoost walk-forward CV results (5 folds, 28-day test horizon each)}
+\label{tab:xgb_cv}
+\begin{tabular}{@{}cllcr@{}}
+\toprule
+\textbf{Fold} & \textbf{Train End} & \textbf{MAPE}$\downarrow$ & \textbf{RMSE}$\downarrow$ & \textbf{N Train} \\
+\midrule
+1 & 2012-02-26 00:00:00 & 0.5486 & 1.8454 & 11,159,340 \\
+2 & 2013-03-11 00:00:00 & 0.5497 & 1.9337 & 22,715,050 \\
+3 & 2014-03-26 00:00:00 & 0.5400 & 1.8590 & 34,301,250 \\
+4 & 2015-04-10 00:00:00 & 0.5303 & 1.6869 & 45,887,450 \\
+5 & 2016-04-24 00:00:00 & 0.5262 & 1.7390 & 57,473,650 \\
+\midrule
+\textbf{Mean} & --- & \textbf{0.5390} & \textbf{1.8128} & --- \\
+\textbf{Std}  & --- & \textbf{0.0106} & \textbf{0.0989}  & --- \\
+\bottomrule
+\multicolumn{5}{l}{\footnotesize From \texttt{data/processed/xgb\_cv\_results.parquet}.}
+\end{tabular}
+\end{table}

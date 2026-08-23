@@ -1,0 +1,14 @@
+\begin{table}[H]
+\centering
+\caption{SRE coverage backtest results ($\alpha=0.05$, window $w=90$ days)}
+\label{tab:coverage}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Model CI} & \textbf{Target $\alpha$} & \textbf{Actual Breach Rate} & \textbf{Calibration Error} \\
+\midrule
+XGBoost 95\% CI  & $5.00\%$ & 0.00\% & 5.00\% \\
+SRE ($w=90$)     & $5.00\%$ & 0.00\% & 5.00\% \\
+\bottomrule
+\multicolumn{4}{l}{\footnotesize From \texttt{src/risk/shortfall.py:coverage\_backtest()}.}
+\end{tabular}
+\end{table}

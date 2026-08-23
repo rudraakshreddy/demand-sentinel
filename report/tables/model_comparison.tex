@@ -1,0 +1,15 @@
+\begin{table}[H]
+\centering
+\caption{Model comparison on 28-day hold-out (walk-forward fold 5, representative 30-series subset). Bold = best per column.}
+\label{tab:model_comparison}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Model} & \textbf{MAPE}$\downarrow$ & \textbf{sMAPE}$\downarrow$ & \textbf{MAE}$\downarrow$ & \textbf{RMSE}$\downarrow$ & \textbf{Coverage}$\uparrow$ & \textbf{Bias} \\
+\midrule
+SARIMA & \textbf{0.5166} & \textbf{0.5787} & \textbf{0.5721} & \textbf{1.3337} & \textbf{97.26\%} & -0.1097 \\
+Prophet & 0.5289 & 0.6174 & 0.7107 & 1.6807 & 93.93\% & -0.0953 \\
+XGBoost & 0.5260 & 1.1563 & 0.7108 & 1.7254 & \textemdash & \textbf{0.0151} \\
+\bottomrule
+\multicolumn{7}{l}{\footnotesize MAPE/sMAPE/MAE/RMSE: lower is better. Coverage: higher is better (target 0.95).}\\
+\end{tabular}
+\end{table}

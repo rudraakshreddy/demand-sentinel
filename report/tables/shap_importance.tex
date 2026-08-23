@@ -1,0 +1,22 @@
+\begin{table}[H]
+\centering
+\caption{Top-10 XGBoost features by mean $|\text{SHAP}|$ value (computed on 2{,}000-row test sample)}
+\label{tab:shap}
+\begin{tabular}{@{}clc@{}}
+\toprule
+\textbf{Rank} & \textbf{Feature} & \textbf{Mean $|\text{SHAP}|$} \\
+\midrule
+1 & \texttt{ewm\_alpha\_01} & 0.0847 \\
+2 & \texttt{ewm\_alpha\_03} & 0.0800 \\
+3 & \texttt{rolling\_mean\_28} & 0.0694 \\
+4 & \texttt{lag\_1} & 0.0358 \\
+5 & \texttt{rolling\_std\_28} & 0.0287 \\
+6 & \texttt{lag\_2} & 0.0269 \\
+7 & \texttt{day\_of\_week} & 0.0261 \\
+8 & \texttt{lag\_3} & 0.0198 \\
+9 & \texttt{day\_of\_month} & 0.0079 \\
+10 & \texttt{lag\_21} & 0.0078 \\
+\bottomrule
+\multicolumn{3}{l}{\footnotesize From \texttt{data/processed/xgb\_shap\_importance.csv}.}
+\end{tabular}
+\end{table}

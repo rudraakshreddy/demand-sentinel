@@ -296,10 +296,21 @@ def main() -> None:
     log.info("Split — train: %d  val: %d  test: %d", len(y_tr), len(y_va), len(y_te))
 
     # ── Hyperparameter tuning (on point objective) ─────────────────────────────
-    log.info("Optuna tuning (%d trials) ...", OPTUNA_TRIALS)
+    log.info("Bypassing Optuna tuning: using best params from full run.")
     t0 = time.perf_counter()
-    best_params = tune_hyperparameters(X_tr, y_tr, X_va, y_va)
-    log.info("  Tuning: %.0fs", time.perf_counter() - t0)
+    best_params = {
+        "n_estimators": 602,
+        "learning_rate": 0.017247061024071843,
+        "max_depth": 10,
+        "subsample": 0.5359498404978726,
+        "colsample_bytree": 0.6668793407545431,
+        "min_child_weight": 17,
+        "reg_alpha": 0.2054844384852384,
+        "reg_lambda": 4.861052139411129e-06,
+        "device": XGB_DEVICE,
+        "tree_method": "hist"
+    }
+    log.info("  Tuning bypassed: %.0fs", time.perf_counter() - t0)
 
     # ── Train 3 models: point + lower CI + upper CI ────────────────────────────
     log.info("Training point model ...")
@@ -311,14 +322,14 @@ def main() -> None:
     log.info("Training lower CI (q=%.3f) model ...", LOWER_Q)
     t0 = time.perf_counter()
     m_lower = train_xgb_model(X_tr, y_tr, X_va, y_va, X_al, y_al, best_params,
-                               objective="reg:quantilereg",
+                               objective="reg:quantileerror",
                                quantile_alpha=LOWER_Q, model_name=f"lower_q{LOWER_Q}")
     log.info("  Lower CI: %.0fs", time.perf_counter() - t0)
 
     log.info("Training upper CI (q=%.3f) model ...", UPPER_Q)
     t0 = time.perf_counter()
     m_upper = train_xgb_model(X_tr, y_tr, X_va, y_va, X_al, y_al, best_params,
-                               objective="reg:quantilereg",
+                               objective="reg:quantileerror",
                                quantile_alpha=UPPER_Q, model_name=f"upper_q{UPPER_Q}")
     log.info("  Upper CI: %.0fs", time.perf_counter() - t0)
 
@@ -370,8 +381,8 @@ def main() -> None:
         pd.DataFrame(imp, columns=["feature", "mean_abs_shap"]).to_csv(
             PROCESSED_DIR / "xgb_shap_importance.csv", index=False
         )
-    except ImportError:
-        log.warning("shap not installed — skipping SHAP. Run: pip install shap")
+    except Exception as e:
+        log.warning("SHAP computation failed or shap not installed: %s", e)
 
     # ── Save models ────────────────────────────────────────────────────────────
     for name, model in [("point", m_point), ("lower", m_lower), ("upper", m_upper)]:
