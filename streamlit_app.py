@@ -56,13 +56,20 @@ st.markdown("""
 
 # ── Data loaders (cached) ─────────────────────────────────────────────────────
 
-def get_conn():
-    return st.connection("postgresql", type="sql")
+from sqlalchemy import create_engine
+
+def get_engine():
+    s = st.secrets["connections"]["postgresql"]
+    pwd = s["password"].replace("@", "%40")
+    uri = f"postgresql+psycopg2://{s['username']}:{pwd}@{s['host']}:{s['port']}/{s['database']}"
+    return create_engine(uri)
+
+
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_sales() -> pd.DataFrame | None:
     try:
-        df = get_conn().query("SELECT item_id, store_id, date_id as date, sales FROM fact_sales")
+        df = pd.read_sql("SELECT item_id, store_id, date_id as date, sales FROM fact_sales", get_engine())
         df["date"] = pd.to_datetime(df["date"])
         return df
     except Exception as e:
@@ -72,7 +79,7 @@ def load_sales() -> pd.DataFrame | None:
 @st.cache_data(ttl=600, show_spinner=False)
 def load_xgb_forecasts() -> pd.DataFrame | None:
     try:
-        df = get_conn().query("SELECT item_id, store_id, date_id as date, forecast, lower_ci_95 as lower_ci, upper_ci_95 as upper_ci FROM fact_forecasts WHERE model_name = 'XGBoost'")
+        df = pd.read_sql("SELECT item_id, store_id, date_id as date, forecast, lower_ci_95 as lower_ci, upper_ci_95 as upper_ci FROM fact_forecasts WHERE model_name = 'XGBoost'", get_engine())
         df["date"] = pd.to_datetime(df["date"])
         df["actual"] = 0 # merged later
         return df
@@ -81,7 +88,7 @@ def load_xgb_forecasts() -> pd.DataFrame | None:
 @st.cache_data(ttl=600, show_spinner=False)
 def load_arima_results() -> pd.DataFrame | None:
     try:
-        df = get_conn().query("SELECT item_id, store_id, date_id as date, forecast, lower_ci_95 as lower_ci, upper_ci_95 as upper_ci FROM fact_forecasts WHERE model_name = 'SARIMA'")
+        df = pd.read_sql("SELECT item_id, store_id, date_id as date, forecast, lower_ci_95 as lower_ci, upper_ci_95 as upper_ci FROM fact_forecasts WHERE model_name = 'SARIMA'", get_engine())
         df["date"] = pd.to_datetime(df["date"])
         df["actual"] = 0
         df["model"] = "SARIMA"
@@ -91,7 +98,7 @@ def load_arima_results() -> pd.DataFrame | None:
 @st.cache_data(ttl=600, show_spinner=False)
 def load_prophet_results() -> pd.DataFrame | None:
     try:
-        df = get_conn().query("SELECT item_id, store_id, date_id as date, forecast, lower_ci_95 as lower_ci, upper_ci_95 as upper_ci FROM fact_forecasts WHERE model_name = 'Prophet'")
+        df = pd.read_sql("SELECT item_id, store_id, date_id as date, forecast, lower_ci_95 as lower_ci, upper_ci_95 as upper_ci FROM fact_forecasts WHERE model_name = 'Prophet'", get_engine())
         df["date"] = pd.to_datetime(df["date"])
         df["actual"] = 0
         df["model"] = "Prophet"
@@ -109,7 +116,7 @@ def load_shortfall() -> pd.DataFrame | None:
 @st.cache_data(ttl=600, show_spinner=False)
 def load_anomalies() -> pd.DataFrame | None:
     try:
-        df = get_conn().query("SELECT item_id, store_id, date_id as date, anomaly_score as if_score, rolling_cv as cv, rolling_mean as z_score FROM fact_risk_flags WHERE is_anomaly = true")
+        df = pd.read_sql("SELECT item_id, store_id, date_id as date, anomaly_score as if_score, rolling_cv as cv, rolling_mean as z_score FROM fact_risk_flags WHERE is_anomaly = true", get_engine())
         df["date"] = pd.to_datetime(df["date"])
         df["sales"] = 0
         return df
@@ -122,7 +129,7 @@ def load_shap() -> pd.DataFrame | None:
 @st.cache_data(ttl=600, show_spinner=False)
 def load_model_comparison() -> pd.DataFrame | None:
     try:
-        df = get_conn().query("SELECT model_name as \"Model\", mape, smape, mae, rmse, wrmsse, coverage_95, interval_width FROM model_evaluation_results")
+        df = pd.read_sql("SELECT model_name as \"Model\", mape, smape, mae, rmse, wrmsse, coverage_95, interval_width FROM model_evaluation_results", get_engine())
         return df
     except Exception as e: st.error(f'DB Error: {e}'); return None
 
