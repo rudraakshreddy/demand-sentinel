@@ -173,7 +173,7 @@ if PAGE == "🏠 Overview":
                     delta=f"{len(anomalies)/len(sales)*100:.2f}% of records" if sales is not None else None,
                     delta_color="off")
     if shortfall is not None and "shortfall_breach" in shortfall.columns:
-        breach_rate = shortfall["shortfall_breach"].mean()
+        breach_rate = shortfall["shortfall_breach"].mean() if len(shortfall) > 0 else 0.0
         col5.metric("Shortfall Breach Rate",
                     f"{breach_rate:.2%}",
                     delta=f"Target: 5.00%",
@@ -489,7 +489,7 @@ elif PAGE == "🔬 Model Evaluation":
     shortfall = load_shortfall()
     if shortfall is not None and "shortfall_breach" in shortfall.columns:
         st.subheader("Shortfall Risk Calibration")
-        breach_rate = shortfall["shortfall_breach"].mean()
+        breach_rate = shortfall["shortfall_breach"].mean() if len(shortfall) > 0 else 0.0
         target = 0.05
 
         fig_gauge = go.Figure(go.Indicator(
