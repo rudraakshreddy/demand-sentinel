@@ -557,7 +557,7 @@ elif PAGE == "🧹 Data Quality":
             "Dtype":        sales.dtypes.astype(str).values,
         })
         st.dataframe(
-            null_df.style.background_gradient(subset=["Null %"], cmap="Reds"),
+            null_df.style.background_gradient(subset=["Null %"], cmap="Reds", vmin=0, vmax=100).format({"Null %": "{:.2f}%"}),
             use_container_width=True, hide_index=True,
         )
 
