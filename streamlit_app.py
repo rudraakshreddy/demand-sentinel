@@ -66,7 +66,9 @@ def load_sales() -> pd.DataFrame | None:
         df = get_conn().query("SELECT item_id, store_id, date_id as date, sales FROM fact_sales")
         df["date"] = pd.to_datetime(df["date"])
         return df
-    except: return None
+    except Exception as e:
+        st.error(f"Database error in load_sales: {e}")
+        return None
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_xgb_forecasts() -> pd.DataFrame | None:
@@ -75,7 +77,7 @@ def load_xgb_forecasts() -> pd.DataFrame | None:
         df["date"] = pd.to_datetime(df["date"])
         df["actual"] = 0 # merged later
         return df
-    except: return None
+    except Exception as e: st.error(f'DB Error: {e}'); return None
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_arima_results() -> pd.DataFrame | None:
@@ -85,7 +87,7 @@ def load_arima_results() -> pd.DataFrame | None:
         df["actual"] = 0
         df["model"] = "SARIMA"
         return df
-    except: return None
+    except Exception as e: st.error(f'DB Error: {e}'); return None
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_prophet_results() -> pd.DataFrame | None:
@@ -95,7 +97,7 @@ def load_prophet_results() -> pd.DataFrame | None:
         df["actual"] = 0
         df["model"] = "Prophet"
         return df
-    except: return None
+    except Exception as e: st.error(f'DB Error: {e}'); return None
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_volatility() -> pd.DataFrame | None:
@@ -112,7 +114,7 @@ def load_anomalies() -> pd.DataFrame | None:
         df["date"] = pd.to_datetime(df["date"])
         df["sales"] = 0
         return df
-    except: return None
+    except Exception as e: st.error(f'DB Error: {e}'); return None
 
 @st.cache_data(ttl=600, show_spinner=False)
 def load_shap() -> pd.DataFrame | None:
@@ -123,7 +125,7 @@ def load_model_comparison() -> pd.DataFrame | None:
     try:
         df = get_conn().query("SELECT model_name as \"Model\", mape, smape, mae, rmse, wrmsse, coverage_95, interval_width FROM model_evaluation_results")
         return df
-    except: return None
+    except Exception as e: st.error(f'DB Error: {e}'); return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
