@@ -197,9 +197,9 @@ def tune_hyperparameters(X_train, y_train, X_val, y_val) -> dict:
             "random_state":     RANDOM_SEED,
             "n_jobs":           -1,
         }
-        m = xgb.XGBRegressor(**params)
+        m = xgb.XGBRegressor(**params, early_stopping_rounds=20)
         m.fit(X_train, y_train, eval_set=[(X_val, y_val)],
-              verbose=False, early_stopping_rounds=20, eval_metric="rmse")
+              verbose=False, eval_metric="rmse")
         return compute_rmse(y_val, np.clip(m.predict(X_val), 0, None))
 
     study = optuna.create_study(
