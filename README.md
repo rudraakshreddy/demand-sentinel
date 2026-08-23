@@ -3,6 +3,10 @@
 > **Semester 8 Major Project** — Production-grade, 7-layer ML pipeline on the M5 Forecasting (Walmart) dataset.
 
 ---
+### 🚀 **[Access the Full 2GB+ Processed Dataset & Models on Hugging Face](https://huggingface.co/datasets/snchakri/m5-retail-demand-forecasting-benchmarks)**
+Because GitHub limits file sizes to 100MB, the massive engineered temporal feature matrices, Isolation Forest scores, XGBoost SHAP values, and `.pkl` artifacts are proudly hosted on Hugging Face. 
+👉 `pip install datasets` and `load_dataset("snchakri/m5-retail-demand-forecasting-benchmarks")` to instantly reproduce this pipeline's outputs!
+---
 
 ## Architecture Overview
 
