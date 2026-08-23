@@ -56,7 +56,6 @@ st.markdown("""
 
 # ── Data loaders (cached) ─────────────────────────────────────────────────────
 
-@st.cache_data(ttl=600, show_spinner=False)
 def get_conn():
     return st.connection("postgresql", type="sql")
 
