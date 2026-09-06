@@ -164,6 +164,35 @@ def load_model_comparison() -> pd.DataFrame | None:
         return df
     except Exception as e: st.error(f'DB Error: {e}'); return None
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_sales_raw_sample() -> pd.DataFrame | None:
+    """Fetch 5 000 raw rows from fact_sales for the Data Quality schema view.
+    Egress: ~300 KB — negligible."""
+    try:
+        df = pd.read_sql(
+            "SELECT f.item_id, f.store_id, f.date_id as date, f.sales, i.cat_id, i.dept_id "
+            "FROM fact_sales f JOIN dim_item i ON f.item_id = i.item_id LIMIT 5000",
+            get_engine()
+        )
+        df["date"] = pd.to_datetime(df["date"])
+        return df
+    except Exception as e:
+        st.error(f"Database error in load_sales_raw_sample: {e}"); return None
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_actuals_for_series(item_id: str, store_id: str) -> pd.DataFrame | None:
+    """Fetch actual sales for one item-store pair — only ~28 rows, ~1 KB."""
+    try:
+        df = pd.read_sql(
+            "SELECT date_id as date, sales FROM fact_sales "
+            "WHERE item_id = %(item)s AND store_id = %(store)s ORDER BY date_id",
+            get_engine(), params={"item": item_id, "store": store_id}
+        )
+        df["date"] = pd.to_datetime(df["date"])
+        return df
+    except Exception as e:
+        st.error(f'DB Error: {e}'); return None
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PAGE 1: Overview
@@ -273,7 +302,18 @@ elif PAGE == "📈 Forecast Explorer":
     selected_item = col2.selectbox("Item", items_in_store, index=0)
     show_ci = col3.checkbox("Show 95% CI bands", value=True)
 
+    # Fetch actuals for selected series only (~28 rows, ~1 KB)
+    actuals = load_actuals_for_series(selected_item, selected_store)
+
     fig = go.Figure()
+
+    # Actual sales line
+    if actuals is not None and not actuals.empty:
+        fig.add_trace(go.Scatter(
+            x=actuals["date"], y=actuals["sales"],
+            name="Actual", mode="lines",
+            line=dict(color="#94a3b8", width=1.5)
+        ))
 
     # XGBoost forecast
     if xgb is not None:
@@ -539,15 +579,15 @@ elif PAGE == "🧹 Data Quality":
     st.caption("Ingestion logs · Null analysis · Schema validation")
     st.divider()
 
-    sales = load_sales()
+    sales_raw = load_sales_raw_sample()
 
-    if sales is not None:
+    if sales_raw is not None:
         st.subheader("Column-Level Null Analysis")
         null_df = pd.DataFrame({
-            "Column":       sales.columns,
-            "Null Count":   sales.isnull().sum().values,
-            "Null %":       (sales.isnull().mean() * 100).round(2).values,
-            "Dtype":        sales.dtypes.astype(str).values,
+            "Column":       sales_raw.columns,
+            "Null Count":   sales_raw.isnull().sum().values,
+            "Null %":       (sales_raw.isnull().mean() * 100).round(2).values,
+            "Dtype":        sales_raw.dtypes.astype(str).values,
         })
         st.dataframe(
             null_df.style.background_gradient(subset=["Null %"], cmap="Reds", vmin=0, vmax=100).format({"Null %": "{:.2f}%"}),
@@ -556,10 +596,10 @@ elif PAGE == "🧹 Data Quality":
 
         st.subheader("Sales Distribution (Log Scale)")
         fig_hist = px.histogram(
-            sales[sales["total_sales"] > 0], x="total_sales",
+            sales_raw[sales_raw["sales"] > 0], x="sales",
             nbins=100, log_y=True,
-            title="Daily Sales Distribution — All Stores (log scale, excluding zero-sales days)",
-            labels={"total_sales": "Total Units Sold per Day"},
+            title="Sales Distribution (excluding zero-sales days)",
+            labels={"sales": "Units Sold"},
             color_discrete_sequence=["#7c3aed"]
         )
         st.plotly_chart(fig_hist, use_container_width=True)
