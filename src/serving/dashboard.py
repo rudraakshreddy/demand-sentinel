@@ -66,80 +66,98 @@ def get_engine():
 
 
 
-@st.cache_data(ttl=600, show_spinner=False)
-def load_sales() -> pd.DataFrame | None:
+# ── Egress-optimised loaders (query pre-aggregated views, TTL=1h) ─────────────
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_kpi_summary() -> dict | None:
+    """Single-row KPI aggregates — replaces 853K-row fact_sales scan."""
     try:
-        df = pd.read_sql("SELECT f.item_id, f.store_id, f.date_id as date, f.sales, i.cat_id, i.dept_id FROM fact_sales f JOIN dim_item i ON f.item_id = i.item_id", get_engine())
+        df = pd.read_sql("SELECT * FROM v_kpi_summary", get_engine())
+        return df.iloc[0].to_dict() if len(df) > 0 else None
+    except Exception as e:
+        st.error(f"DB Error: {e}"); return None
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_sales() -> pd.DataFrame | None:
+    """Daily aggregated sales (date × cat × store) — ~3 KB vs 12 MB raw."""
+    try:
+        df = pd.read_sql("SELECT date, cat_id, dept_id, store_id, n_items, total_sales, avg_sales, n_records FROM v_daily_sales ORDER BY date", get_engine())
         df["date"] = pd.to_datetime(df["date"])
         return df
     except Exception as e:
-        st.error(f"Database error in load_sales: {e}")
-        return None
+        st.error(f"Database error in load_sales: {e}"); return None
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_xgb_forecasts() -> pd.DataFrame | None:
     try:
-        df = pd.read_sql("SELECT item_id, store_id, date_id as date, forecast, lower_ci_95 as lower_ci, upper_ci_95 as upper_ci FROM fact_forecasts WHERE model_name = 'XGBoost'", get_engine())
+        df = pd.read_sql("SELECT item_id, store_id, date, forecast, lower_ci, upper_ci FROM v_forecast_xgb", get_engine())
         df["date"] = pd.to_datetime(df["date"])
-        df["actual"] = 0 # merged later
         return df
     except Exception as e: st.error(f'DB Error: {e}'); return None
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_arima_results() -> pd.DataFrame | None:
     try:
-        df = pd.read_sql("SELECT item_id, store_id, date_id as date, forecast, lower_ci_95 as lower_ci, upper_ci_95 as upper_ci FROM fact_forecasts WHERE model_name = 'SARIMA'", get_engine())
+        df = pd.read_sql("SELECT item_id, store_id, date, forecast, lower_ci, upper_ci FROM v_forecast_sarima", get_engine())
         df["date"] = pd.to_datetime(df["date"])
-        df["actual"] = 0
         df["model"] = "SARIMA"
         return df
     except Exception as e: st.error(f'DB Error: {e}'); return None
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_prophet_results() -> pd.DataFrame | None:
     try:
-        df = pd.read_sql("SELECT item_id, store_id, date_id as date, forecast, lower_ci_95 as lower_ci, upper_ci_95 as upper_ci FROM fact_forecasts WHERE model_name = 'Prophet'", get_engine())
+        df = pd.read_sql("SELECT item_id, store_id, date, forecast, lower_ci, upper_ci FROM v_forecast_prophet", get_engine())
         df["date"] = pd.to_datetime(df["date"])
-        df["actual"] = 0
         df["model"] = "Prophet"
         return df
     except Exception as e: st.error(f'DB Error: {e}'); return None
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_volatility() -> pd.DataFrame | None:
+    """Pre-bucketed regime distribution — tiny (3 rows) vs 853K-row scan."""
     try:
-        df = pd.read_sql("SELECT item_id, store_id, date_id as date, rolling_cv FROM fact_risk_flags WHERE rolling_cv IS NOT NULL", get_engine())
-        if len(df) > 0:
-            df["volatility_regime"] = pd.cut(df["rolling_cv"], bins=[-np.inf, 0.5, 1.0, np.inf], labels=["Low", "Medium", "High"])
+        df = pd.read_sql("SELECT regime, count FROM v_volatility_regimes", get_engine())
         return df
     except Exception as e:
-        st.error(f'DB Error: {e}')
-        return None
+        st.error(f'DB Error: {e}'); return None
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_shortfall() -> pd.DataFrame | None:
+    """KPI aggregate + SRI latest snapshot only."""
     try:
-        df = pd.read_sql("SELECT item_id, store_id, date, shortfall_breach, sri FROM fact_shortfall", get_engine())
-        df["date"] = pd.to_datetime(df["date"])
-        return df
+        kpi = pd.read_sql("SELECT breach_rate, avg_sri, n_records FROM v_shortfall_kpi", get_engine())
+        sri = pd.read_sql("SELECT item_id, store_id, date, sri, shortfall_breach FROM v_sri_latest", get_engine())
+        sri["date"] = pd.to_datetime(sri["date"])
+        # Attach breach_rate as a column so downstream code still works
+        sri["breach_rate"] = float(kpi["breach_rate"].iloc[0]) if len(kpi) > 0 else None
+        return sri
     except Exception as e:
-        st.error(f'DB Error: {e}')
-        return None
+        st.error(f'DB Error: {e}'); return None
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_anomalies() -> pd.DataFrame | None:
+    """Only flagged rows (already filtered view)."""
     try:
-        df = pd.read_sql("SELECT item_id, store_id, date_id as date, anomaly_score as if_score, rolling_cv as cv, rolling_mean as z_score FROM fact_risk_flags WHERE is_anomaly = true AND flag_type = 'isolation_forest'", get_engine())
+        df = pd.read_sql("SELECT item_id, store_id, date, if_score, cv, z_score, sales FROM v_anomalies", get_engine())
         df["date"] = pd.to_datetime(df["date"])
-        df["sales"] = 0
         return df
     except Exception as e: st.error(f'DB Error: {e}'); return None
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_anomaly_timeline() -> pd.DataFrame | None:
+    """Date-level anomaly counts — tiny (n_dates rows) for timeline chart."""
+    try:
+        df = pd.read_sql("SELECT date, anomaly_count FROM v_anomaly_by_date", get_engine())
+        df["date"] = pd.to_datetime(df["date"])
+        return df
+    except Exception as e: st.error(f'DB Error: {e}'); return None
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_shap() -> pd.DataFrame | None:
     return None
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_model_comparison() -> pd.DataFrame | None:
     try:
         df = pd.read_sql("SELECT model_name as \"Model\", mape, smape, mae, rmse, wrmsse, coverage_95, interval_width FROM model_evaluation_results", get_engine())
@@ -166,31 +184,31 @@ if PAGE == "🏠 Overview":
     st.caption("M5 Forecasting Competition Dataset · Walmart Stores USA")
     st.divider()
 
-    sales = load_sales()
+    kpi       = load_kpi_summary()
     anomalies = load_anomalies()
     comparison = load_model_comparison()
     shortfall = load_shortfall()
+    sales     = load_sales()   # v_daily_sales — aggregated, tiny
 
     col1, col2, col3, col4, col5 = st.columns(5)
 
-    if sales is not None:
-        col1.metric("Total SKU-Store Series",
-                    f"{sales.groupby(['item_id','store_id']).ngroups:,}")
-        col2.metric("Days of History",
-                    f"{sales['date'].nunique():,}")
-        col3.metric("Total Sales Records",
-                    f"{len(sales):,}")
+    if kpi is not None:
+        col1.metric("Total SKU-Store Series", f"{int(kpi.get('sku_store_series', 0)):,}")
+        col2.metric("Days of History",        f"{int(kpi.get('days_of_history', 0)):,}")
+        col3.metric("Total Sales Records",    f"{int(kpi.get('total_records', 0)):,}")
     if anomalies is not None:
+        n_anom = len(anomalies)
+        total  = int(kpi.get("total_records", 1)) if kpi else 1
         col4.metric("Anomaly Flags",
-                    f"{len(anomalies):,}",
-                    delta=f"{len(anomalies)/len(sales)*100:.2f}% of records" if sales is not None else None,
+                    f"{n_anom:,}",
+                    delta=f"{n_anom/total*100:.2f}% of records",
                     delta_color="off")
-    if shortfall is not None and "shortfall_breach" in shortfall.columns:
-        if len(shortfall) > 0:
-            breach_rate = shortfall["shortfall_breach"].mean()
+    if shortfall is not None and "breach_rate" in shortfall.columns:
+        breach_rate = shortfall["breach_rate"].iloc[0]
+        if breach_rate is not None and not pd.isna(breach_rate):
             col5.metric("Shortfall Breach Rate",
                         f"{breach_rate:.2%}",
-                        delta=f"Target: 2.50%",
+                        delta="Target: 2.50%",
                         delta_color="normal" if abs(breach_rate - 0.025) < 0.01 else "inverse")
         else:
             col5.metric("Shortfall Breach Rate", "N/A", delta="Pending pipeline run", delta_color="off")
@@ -199,10 +217,10 @@ if PAGE == "🏠 Overview":
 
     if sales is not None:
         st.subheader("📅 Aggregate Daily Demand — All Stores")
-        agg = sales.groupby("date")["sales"].sum().reset_index()
-        fig = px.area(agg, x="date", y="sales",
+        agg = sales.groupby("date")["total_sales"].sum().reset_index()
+        fig = px.area(agg, x="date", y="total_sales",
                       title="Total Daily Sales Across All M5 Item-Store Pairs",
-                      labels={"sales": "Units Sold", "date": "Date"},
+                      labels={"total_sales": "Units Sold", "date": "Date"},
                       color_discrete_sequence=["#7c3aed"])
         fig.update_layout(hovermode="x unified", showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
@@ -210,21 +228,21 @@ if PAGE == "🏠 Overview":
     col_a, col_b = st.columns(2)
     with col_a:
         if sales is not None:
-            by_cat = sales.groupby("cat_id")["sales"].sum().reset_index()
-            fig2 = px.bar(by_cat, x="cat_id", y="sales",
+            by_cat = sales.groupby("cat_id")["total_sales"].sum().reset_index()
+            fig2 = px.bar(by_cat, x="cat_id", y="total_sales",
                           title="Total Sales by Category",
-                          color="sales",
+                          color="total_sales",
                           color_continuous_scale="Viridis",
-                          labels={"cat_id": "Category", "sales": "Units"})
+                          labels={"cat_id": "Category", "total_sales": "Units"})
             st.plotly_chart(fig2, use_container_width=True)
     with col_b:
         if sales is not None:
-            by_store = sales.groupby("store_id")["sales"].mean().reset_index()
-            fig3 = px.bar(by_store, x="store_id", y="sales",
+            by_store = sales.groupby("store_id")["avg_sales"].mean().reset_index()
+            fig3 = px.bar(by_store, x="store_id", y="avg_sales",
                           title="Mean Daily Sales by Store",
-                          color="sales",
+                          color="avg_sales",
                           color_continuous_scale="RdYlGn",
-                          labels={"store_id": "Store", "sales": "Mean Units/Day"})
+                          labels={"store_id": "Store", "avg_sales": "Mean Units/Day"})
             st.plotly_chart(fig3, use_container_width=True)
 
 
@@ -237,36 +255,25 @@ elif PAGE == "📈 Forecast Explorer":
     st.caption("Compare SARIMA · Prophet · XGBoost forecasts per item-store pair")
     st.divider()
 
-    sales = load_sales()
-    xgb   = load_xgb_forecasts()
-    arima = load_arima_results()
+    xgb     = load_xgb_forecasts()
+    arima   = load_arima_results()
     prophet = load_prophet_results()
 
-    if sales is None:
-        st.warning("Run the pipeline first: `make ingest etl train`")
+    # Derive item/store lists from the forecast data (which still has item/store grain)
+    fc_ref = xgb if xgb is not None else arima if arima is not None else prophet
+    if fc_ref is None:
+        st.warning("No forecast data found. Run the pipeline first: `make ingest etl train`")
         st.stop()
 
     # Selectors
     col1, col2, col3 = st.columns(3)
-    all_items  = sorted(sales["item_id"].unique())
-    all_stores = sorted(sales["store_id"].unique())
-
+    all_stores = sorted(fc_ref["store_id"].unique())
     selected_store = col1.selectbox("Store", all_stores, index=0)
-    items_in_store = sorted(
-        sales[sales["store_id"] == selected_store]["item_id"].unique()
-    )
+    items_in_store = sorted(fc_ref[fc_ref["store_id"] == selected_store]["item_id"].unique())
     selected_item = col2.selectbox("Item", items_in_store, index=0)
     show_ci = col3.checkbox("Show 95% CI bands", value=True)
 
-    # Filter sales
-    mask = (sales["item_id"] == selected_item) & (sales["store_id"] == selected_store)
-    s = sales[mask].set_index("date")["sales"].sort_index()
-
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=s.index, y=s.values, name="Actual", mode="lines",
-        line=dict(color="#94a3b8", width=1.5)
-    ))
 
     # XGBoost forecast
     if xgb is not None:
@@ -326,25 +333,6 @@ elif PAGE == "📈 Forecast Explorer":
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Metric cards below
-    if arima is not None and prophet is not None:
-        ar_sub = arima[(arima["item_id"] == selected_item) & (arima["store_id"] == selected_store)]
-        pr_sub = prophet[(prophet["item_id"] == selected_item) & (prophet["store_id"] == selected_store)]
-
-        if not ar_sub.empty and not pr_sub.empty:
-            from src.evaluation.metrics import mape, rmse
-            st.subheader("Forecast Accuracy — This Series")
-            c1, c2, c3 = st.columns(3)
-            ar_mape = mape(ar_sub["actual"].values, ar_sub["forecast"].values)
-            pr_mape = mape(pr_sub["actual"].values, pr_sub["forecast"].values)
-            c1.metric("SARIMA MAPE",  f"{ar_mape:.2%}")
-            c2.metric("Prophet MAPE", f"{pr_mape:.2%}")
-            if xgb is not None:
-                xgb_sub = xgb[(xgb["item_id"] == selected_item) & (xgb["store_id"] == selected_store)]
-                if not xgb_sub.empty and "actual" in xgb_sub.columns:
-                    xgb_mape = mape(xgb_sub["actual"].values, xgb_sub["forecast"].values)
-                    c3.metric("XGBoost MAPE", f"{xgb_mape:.2%}")
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PAGE 3: Risk Monitor
@@ -355,26 +343,18 @@ elif PAGE == "⚠️ Risk Monitor":
     st.caption("Rolling Volatility · Anomaly Flags · Stockout Risk Index (SRI)")
     st.divider()
 
-    vol       = load_volatility()
-    anomalies = load_anomalies()
-    shortfall = load_shortfall()
-
-    if vol is None:
-        st.warning("Run `make risk` to compute risk metrics first.")
-        st.stop()
+    vol       = load_volatility()       # v_volatility_regimes — 3 rows
+    anomalies = load_anomalies()        # v_anomalies — flagged rows only
+    anom_timeline = load_anomaly_timeline()  # v_anomaly_by_date — tiny
+    shortfall = load_shortfall()        # v_sri_latest — one row per item/store
 
     # ── SRI Heatmap ──────────────────────────────────────────────────────────
-    if shortfall is not None and "sri" in shortfall.columns:
+    if shortfall is not None and "sri" in shortfall.columns and len(shortfall) > 0:
         st.subheader("🔥 Stockout Risk Index (SRI) — Latest Snapshot")
-        latest = shortfall.sort_values("date").groupby(
-            ["item_id", "store_id"]
-        ).last().reset_index()
-
-        pivot = latest.pivot_table(
+        pivot = shortfall.pivot_table(
             index="item_id", columns="store_id", values="sri", aggfunc="mean"
         )
-        # Show top-50 highest-risk items
-        top_items = latest.groupby("item_id")["sri"].mean().nlargest(50).index
+        top_items = shortfall.groupby("item_id")["sri"].mean().nlargest(50).index
         pivot_top = pivot.loc[pivot.index.isin(top_items)]
 
         fig_heat = px.imshow(
@@ -390,13 +370,11 @@ elif PAGE == "⚠️ Risk Monitor":
     # ── Volatility regime distribution ──────────────────────────────────────
     col_a, col_b = st.columns(2)
     with col_a:
-        if vol is not None and "volatility_regime" in vol.columns and len(vol) > 0:
+        if vol is not None and len(vol) > 0:
             st.subheader("Volatility Regime Distribution")
-            regime_counts = vol["volatility_regime"].value_counts().reset_index()
-            regime_counts.columns = ["Regime", "Count"]
             fig_pie = px.pie(
-                regime_counts, values="Count", names="Regime",
-                color="Regime",
+                vol, values="count", names="regime",
+                color="regime",
                 color_discrete_map={"Low": "#10b981", "Medium": "#f59e0b", "High": "#ef4444"},
                 title="Demand Volatility Regimes Across All Series"
             )
@@ -406,13 +384,12 @@ elif PAGE == "⚠️ Risk Monitor":
             st.info("Volatility Risk pipeline data not yet generated.")
 
     with col_b:
-        if anomalies is not None:
+        if anom_timeline is not None:
             st.subheader("Anomaly Timeline")
-            anom_by_date = anomalies.groupby("date").size().reset_index(name="count")
             fig_anom = px.bar(
-                anom_by_date, x="date", y="count",
+                anom_timeline, x="date", y="anomaly_count",
                 title="Daily Isolation Forest Anomaly Flags",
-                labels={"date": "Date", "count": "Anomaly Count"},
+                labels={"date": "Date", "anomaly_count": "Anomaly Count"},
                 color_discrete_sequence=["#ef4444"]
             )
             st.plotly_chart(fig_anom, use_container_width=True)
