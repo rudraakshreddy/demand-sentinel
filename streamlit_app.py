@@ -333,6 +333,17 @@ elif PAGE == "📈 Forecast Explorer":
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    # Show which models have coverage for this series
+    missing = []
+    if arima is not None and arima[(arima["item_id"] == selected_item) & (arima["store_id"] == selected_store)].empty:
+        missing.append("SARIMA")
+    if prophet is not None and prophet[(prophet["item_id"] == selected_item) & (prophet["store_id"] == selected_store)].empty:
+        missing.append("Prophet")
+    if missing:
+        st.info(f"ℹ️ **{' & '.join(missing)}** forecasts are not available for this series. "
+                f"These models were fitted on a representative sample of 30 high-volume series only. "
+                f"Try selecting items like **FOODS_3_090**, **FOODS_3_586**, or **HOUSEHOLD_1_023** for full model coverage.")
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PAGE 3: Risk Monitor
@@ -434,20 +445,25 @@ elif PAGE == "🔬 Model Evaluation":
     display_cols = [c for c in ["Model", "mape", "smape", "mae", "rmse",
                                  "wrmsse", "coverage_95", "interval_width"]
                     if c in comparison.columns]
+    # Deduplicate: keep the best (lowest MAPE) run per model
     disp = comparison[display_cols].copy()
     for c in disp.columns:
         if c != "Model":
             disp[c] = pd.to_numeric(disp[c], errors="coerce").round(4)
+    disp = disp.sort_values("mape").drop_duplicates(subset=["Model"]).sort_values("mape").reset_index(drop=True)
 
     st.dataframe(
         disp.style.highlight_min(subset=[c for c in display_cols
-                                         if c not in ["Model", "coverage_95"]],
+                                         if c not in ["Model", "coverage_95", "wrmsse"]],
                                  color="#bbf7d0")
                   .highlight_max(subset=["coverage_95"] if "coverage_95" in display_cols else [],
-                                 color="#bbf7d0"),
+                                 color="#bbf7d0")
+                  .format(na_rep="N/A"),
         use_container_width=True,
         hide_index=True,
     )
+    st.caption("**N/A** in `wrmsse` — requires full 5-year training history (not loaded in cloud evaluation). "
+               "**N/A** in `coverage_95` / `interval_width` for XGBoost — point-forecast model, no confidence intervals.")
 
     # ── Metric bar charts ────────────────────────────────────────────────────
     metric_options = [c for c in ["mape", "rmse", "mae", "smape", "wrmsse"]
@@ -540,9 +556,10 @@ elif PAGE == "🧹 Data Quality":
 
         st.subheader("Sales Distribution (Log Scale)")
         fig_hist = px.histogram(
-            sales[sales["sales"] > 0], x="sales",
+            sales[sales["total_sales"] > 0], x="total_sales",
             nbins=100, log_y=True,
-            title="Sales Distribution (excluding zero-sales days)",
+            title="Daily Sales Distribution — All Stores (log scale, excluding zero-sales days)",
+            labels={"total_sales": "Total Units Sold per Day"},
             color_discrete_sequence=["#7c3aed"]
         )
         st.plotly_chart(fig_hist, use_container_width=True)
