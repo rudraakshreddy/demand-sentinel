@@ -193,6 +193,38 @@ def load_actuals_for_series(item_id: str, store_id: str) -> pd.DataFrame | None:
     except Exception as e:
         st.error(f'DB Error: {e}'); return None
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_sales_null_stats() -> pd.DataFrame | None:
+    """Compute null counts for ALL 853K rows entirely in SQL — returns 1 row.
+    Zero egress: only a tiny JSON summary is transferred."""
+    try:
+        sql = """
+            SELECT
+                COUNT(*)                               AS total_rows,
+                COUNT(*) - COUNT(f.item_id)            AS item_id_nulls,
+                COUNT(*) - COUNT(f.store_id)           AS store_id_nulls,
+                COUNT(*) - COUNT(f.date_id)            AS date_nulls,
+                COUNT(*) - COUNT(f.sales)              AS sales_nulls,
+                COUNT(*) - COUNT(i.cat_id)             AS cat_id_nulls,
+                COUNT(*) - COUNT(i.dept_id)            AS dept_id_nulls
+            FROM fact_sales f
+            JOIN dim_item i ON f.item_id = i.item_id
+        """
+        row = pd.read_sql(sql, get_engine()).iloc[0]
+        total = int(row["total_rows"])
+        cols  = ["item_id", "store_id", "date", "sales", "cat_id", "dept_id"]
+        nulls = [int(row[f"{c}_nulls"]) for c in ["item_id", "store_id", "date", "sales", "cat_id", "dept_id"]]
+        dtypes = ["object", "object", "date", "float64", "object", "object"]
+        return pd.DataFrame({
+            "Column":     cols,
+            "Null Count": nulls,
+            "Null %":     [round(n / total * 100, 4) for n in nulls],
+            "Dtype":      dtypes,
+            "Total Rows": [total] * len(cols),
+        })
+    except Exception as e:
+        st.error(f"Database error in load_sales_null_stats: {e}"); return None
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PAGE 1: Overview
@@ -583,21 +615,20 @@ elif PAGE == "🧹 Data Quality":
     st.caption("Ingestion logs · Null analysis · Schema validation")
     st.divider()
 
-    sales_raw = load_sales_raw_sample()
+    null_stats = load_sales_null_stats()   # 1 row result from SQL COUNT on all 853K rows
+    sales_raw  = load_sales_raw_sample()   # 5K rows for histogram only
 
-    if sales_raw is not None:
+    if null_stats is not None:
         st.subheader("Column-Level Null Analysis")
-        null_df = pd.DataFrame({
-            "Column":       sales_raw.columns,
-            "Null Count":   sales_raw.isnull().sum().values,
-            "Null %":       (sales_raw.isnull().mean() * 100).round(2).values,
-            "Dtype":        sales_raw.dtypes.astype(str).values,
-        })
+        st.caption(f"Computed over all **{null_stats['Total Rows'].iloc[0]:,}** records via server-side SQL aggregation.")
         st.dataframe(
-            null_df.style.background_gradient(subset=["Null %"], cmap="Reds", vmin=0, vmax=100).format({"Null %": "{:.2f}%"}),
+            null_stats[["Column", "Null Count", "Null %", "Dtype"]].style
+                .background_gradient(subset=["Null %"], cmap="Reds", vmin=0, vmax=100)
+                .format({"Null %": "{:.4f}%"}),
             use_container_width=True, hide_index=True,
         )
 
+    if sales_raw is not None:
         st.subheader("Sales Distribution (Log Scale)")
         fig_hist = px.histogram(
             sales_raw[sales_raw["sales"] > 0], x="sales",
