@@ -506,13 +506,13 @@ elif PAGE == "🔬 Model Evaluation":
                "**N/A** in `coverage_95` / `interval_width` for XGBoost — point-forecast model, no confidence intervals.")
 
     # ── Metric bar charts ────────────────────────────────────────────────────
-    metric_options = [c for c in ["mape", "rmse", "mae", "smape", "wrmsse"]
-                      if c in comparison.columns]
+    metric_options = [c for c in ["mape", "rmse", "mae", "smape"]
+                      if c in disp.columns and disp[c].notna().any()]
     selected_metric = st.selectbox("Select metric to visualise", metric_options)
 
     if selected_metric:
         fig_bar = px.bar(
-            comparison, x="Model", y=selected_metric,
+            disp, x="Model", y=selected_metric,  # use deduplicated disp, not raw comparison
             color="Model",
             color_discrete_sequence=["#7c3aed", "#10b981", "#f59e0b"],
             title=f"{selected_metric.upper()} by Model (lower is better)",
@@ -539,13 +539,17 @@ elif PAGE == "🔬 Model Evaluation":
 
     # ── Coverage calibration ─────────────────────────────────────────────────
     shortfall = load_shortfall()
-    if shortfall is not None and "shortfall_breach" in shortfall.columns:
+    if shortfall is not None:
         st.subheader("Shortfall Risk Calibration")
-        if len(shortfall) == 0:
+        # Use the pre-aggregated breach_rate from v_shortfall_kpi (full dataset)
+        # NOT shortfall["shortfall_breach"].mean() which only covers latest snapshot
+        breach_rate = shortfall["breach_rate"].iloc[0] if "breach_rate" in shortfall.columns and len(shortfall) > 0 else None
+
+        if breach_rate is None or pd.isna(breach_rate):
             st.info("Shortfall Risk pipeline data not yet generated. Run `make risk` locally to push data to Supabase.")
         else:
-            breach_rate = shortfall["shortfall_breach"].mean()
             target = 0.025
+            gauge_max = max(20.0, round(breach_rate * 100 * 1.5))  # auto-scale so needle never clips
 
             fig_gauge = go.Figure(go.Indicator(
                 mode="gauge+number+delta",
@@ -553,11 +557,11 @@ elif PAGE == "🔬 Model Evaluation":
                 delta={"reference": target * 100, "valueformat": ".2f"},
                 title={"text": "Shortfall Breach Rate (%) vs 2.5% Target"},
                 gauge={
-                    "axis": {"range": [0, 10]},
+                    "axis": {"range": [0, gauge_max]},
                     "steps": [
-                        {"range": [0, 1.5], "color": "#fef9c3"},
-                        {"range": [1.5, 3.5], "color": "#bbf7d0"},
-                        {"range": [3.5, 10], "color": "#fecaca"},
+                        {"range": [0, target * 100 * 0.6], "color": "#fef9c3"},
+                        {"range": [target * 100 * 0.6, target * 100 * 1.4], "color": "#bbf7d0"},
+                        {"range": [target * 100 * 1.4, gauge_max], "color": "#fecaca"},
                     ],
                     "threshold": {
                         "line": {"color": "green", "width": 4},
