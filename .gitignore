@@ -69,3 +69,11 @@ report/src/*.out
 report/src/*.bbl
 report/src/*.blg
 report/src/*.toc
+*.tex
+*.sty
+*.bib
+*.spl
+*.aux
+*.toc
+*.bbl
+*.blg
